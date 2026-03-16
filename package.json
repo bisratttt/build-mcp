@@ -15,6 +15,7 @@
     "mcp": "tsx src/mcp.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
