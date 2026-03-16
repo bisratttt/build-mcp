@@ -44,9 +44,9 @@ async function parseFromUrl(url: string): Promise<NormalizedSpec> {
 
 function detectAndParse(parsed: Record<string, unknown>, input: string): Promise<NormalizedSpec> {
   // OpenAPI 3.x
-  if ('openapi' in parsed) return parseOpenApi(input);
+  if ('openapi' in parsed) return parseOpenApi(parsed);
   // Swagger 2.x
-  if ('swagger' in parsed) return parseOpenApi(input);
+  if ('swagger' in parsed) return parseOpenApi(parsed);
   // Postman collection
   if ('info' in parsed && 'item' in parsed) return Promise.resolve(parsePostman(parsed));
   // HAR

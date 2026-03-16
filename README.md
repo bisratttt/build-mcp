@@ -14,8 +14,10 @@ mcpify generates exactly **2 tools** regardless of API size:
 
 | Tool | What it does |
 |---|---|
-| `search_api_docs` | Semantic search over all endpoints — returns IDs + param schemas on demand |
-| `call_api` | Executes any endpoint by ID with the params you provide |
+| `{api-name}_search_docs` | Semantic search over all endpoints — returns IDs + param schemas on demand |
+| `{api-name}_call_api` | Executes any endpoint by ID with the params you provide |
+
+The tool names are prefixed with the API slug (e.g. `stripe-api_search_docs`, `stripe-api_call_api`), so connecting multiple mcpified APIs to the same agent produces unambiguously named tools — no collisions, no relying on the MCP client to namespace them.
 
 The agent searches first, gets back what it needs, then calls. Context stays clean whether the API has 10 endpoints or 10,000.
 
@@ -23,7 +25,7 @@ The agent searches first, gets back what it needs, then calls. Context stays cle
 
 1. **Parse** your spec (OpenAPI 2/3, Postman, HAR, GraphQL)
 2. **Embed** every endpoint with [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) (local, no API key) and store in SQLite
-3. **Generate** a self-contained TypeScript MCP server with `search_api_docs` + `call_api` and a `.env.example` for auth
+3. **Generate** a self-contained TypeScript MCP server with `{api-name}_search_docs` + `{api-name}_call_api` and a `.env.example` for auth
 4. **Run** the server — your agent finds what it needs, calls it, done
 
 ## Supported input formats
@@ -109,7 +111,7 @@ console.log('Set these env vars:', result.envVars.map(v => v.name));
 ```
 my-api-mcp/
 ├── src/
-│   └── server.ts        # 2-tool MCP server (search_api_docs + call_api)
+│   └── server.ts        # 2-tool MCP server ({api-name}_search_docs + {api-name}_call_api)
 ├── db/
 │   └── api.sqlite       # Pre-built semantic search index
 ├── .env.example         # Required auth credentials

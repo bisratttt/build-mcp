@@ -7,7 +7,7 @@ import type { NormalizedSpec, EmbedConfig } from '../../src/types.js';
 
 // Mock the embed module so tests don't need a real API key
 vi.mock('../../src/indexer/embed.js', () => ({
-  embed: vi.fn(async (text: string) => {
+  embed: vi.fn(async (text: string, _config: unknown, isQuery = false) => {
     // Deterministic fake embeddings based on text content
     // "pets" endpoints get higher first dimension
     const dim = 8;

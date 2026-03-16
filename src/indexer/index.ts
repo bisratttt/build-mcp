@@ -2,6 +2,28 @@ import { DatabaseSync } from 'node:sqlite';
 import type { NormalizedSpec, Endpoint, EmbedConfig } from '../types.js';
 import { embed, buildEndpointText } from './embed.js';
 
+/**
+ * Strip JSON schemas from an endpoint before storing.
+ * Dereferenced specs (e.g. Stripe) have circular $ref objects that
+ * JSON.stringify can't handle. call_api only needs structural info —
+ * method, path, param names/locations, and body content type.
+ */
+function sanitizeEndpoint(ep: Endpoint): Endpoint {
+  return {
+    ...ep,
+    parameters: ep.parameters.map(p => ({
+      name: p.name,
+      in: p.in,
+      required: p.required,
+      description: p.description,
+    })),
+    requestBody: ep.requestBody
+      ? { required: ep.requestBody.required, contentType: ep.requestBody.contentType }
+      : undefined,
+    responses: [],
+  };
+}
+
 function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < a.length; i++) {
@@ -71,7 +93,7 @@ export class ApiIndexer {
       insertEndpoint.run(
         ep.id, ep.method, ep.path,
         ep.summary ?? null, ep.description ?? null,
-        JSON.stringify(ep.tags), JSON.stringify(ep),
+        JSON.stringify(ep.tags), JSON.stringify(sanitizeEndpoint(ep)),
         embeddingBuf,
       );
     }

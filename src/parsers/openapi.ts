@@ -16,8 +16,11 @@ function toEnvVar(apiTitle: string, name: string): string {
   return `${slug(apiTitle).toUpperCase()}_${slug(name).toUpperCase()}`;
 }
 
-export async function parseOpenApi(input: string): Promise<NormalizedSpec> {
-  const api = await SwaggerParser.dereference(input) as V2Doc | V3Doc;
+export async function parseOpenApi(input: string | Record<string, unknown>): Promise<NormalizedSpec> {
+  // Pass parsed objects directly — swagger-parser uses file extension to determine
+  // parse mode, so paths with non-standard extensions (.txt, .bin, etc.) must be
+  // pre-parsed and passed as an object to avoid extension-based failures.
+  const api = await SwaggerParser.dereference(input as Parameters<typeof SwaggerParser.dereference>[0]) as V2Doc | V3Doc;
   const isV2 = 'swagger' in api;
 
   return isV2

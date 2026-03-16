@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { endpointToTool } from '../../src/generator/tools.js';
+import { formatEndpointForSearch } from '../../src/generator/tools.js';
 import type { Endpoint } from '../../src/types.js';
-
-const BASE_URL = 'https://api.example.com';
-const AUTH_HEADERS = "{ 'X-API-Key': process.env.MY_API_KEY ?? '' }";
-const NO_AUTH = '{}';
 
 function makeEndpoint(overrides: Partial<Endpoint>): Endpoint {
   return {
@@ -18,118 +14,87 @@ function makeEndpoint(overrides: Partial<Endpoint>): Endpoint {
   };
 }
 
-describe('endpointToTool', () => {
-  it('uses operationId as tool name', () => {
-    const tool = endpointToTool(makeEndpoint({ id: 'listPets' }), BASE_URL, NO_AUTH, '');
-    expect(tool.name).toBe('listPets');
+describe('formatEndpointForSearch', () => {
+  it('includes endpoint ID, method, and path on first line', () => {
+    const result = formatEndpointForSearch(makeEndpoint({ id: 'listPets', method: 'GET', path: '/pets' }));
+    expect(result).toContain('listPets (GET /pets)');
   });
 
-  it('uses summary as description', () => {
-    const tool = endpointToTool(makeEndpoint({ summary: 'List all pets' }), BASE_URL, NO_AUTH, '');
-    expect(tool.description).toContain('List all pets');
+  it('includes summary', () => {
+    const result = formatEndpointForSearch(makeEndpoint({ summary: 'List all pets' }));
+    expect(result).toContain('List all pets');
   });
 
-  it('appends deprecation warning to description', () => {
-    const tool = endpointToTool(makeEndpoint({ deprecated: true, summary: 'Old endpoint' }), BASE_URL, NO_AUTH, '');
-    expect(tool.description).toContain('DEPRECATED');
+  it('falls back to description when no summary', () => {
+    const result = formatEndpointForSearch(makeEndpoint({ description: 'Returns pets from the store' }));
+    expect(result).toContain('Returns pets from the store');
   });
 
-  it('appends tags to description', () => {
-    const tool = endpointToTool(makeEndpoint({ tags: ['pets', 'animals'] }), BASE_URL, NO_AUTH, '');
-    expect(tool.description).toContain('pets');
-    expect(tool.description).toContain('animals');
+  it('marks deprecated endpoints', () => {
+    const result = formatEndpointForSearch(makeEndpoint({ deprecated: true }));
+    expect(result).toContain('DEPRECATED');
   });
 
-  it('generates zod field for string query param', () => {
-    const tool = endpointToTool(makeEndpoint({
-      parameters: [{ name: 'status', in: 'query', required: false, schema: { type: 'string' } }],
-    }), BASE_URL, NO_AUTH, '');
-    const field = tool.inputSchema.fields.find(f => f.name === 'status')!;
-    expect(field).toBeDefined();
-    expect(field.zodType).toBe('z.string()');
-    expect(field.optional).toBe(true);
+  it('lists query parameters with type and required status', () => {
+    const result = formatEndpointForSearch(makeEndpoint({
+      parameters: [
+        { name: 'limit', in: 'query', required: false, schema: { type: 'integer' } },
+        { name: 'status', in: 'query', required: true, schema: { type: 'string' } },
+      ],
+    }));
+    expect(result).toContain('limit (query, optional, integer)');
+    expect(result).toContain('status (query, required, string)');
   });
 
-  it('marks required parameters as non-optional', () => {
-    const tool = endpointToTool(makeEndpoint({
+  it('lists path parameters', () => {
+    const result = formatEndpointForSearch(makeEndpoint({
       parameters: [{ name: 'petId', in: 'path', required: true, schema: { type: 'string' } }],
-    }), BASE_URL, NO_AUTH, '');
-    const field = tool.inputSchema.fields.find(f => f.name === 'petId')!;
-    expect(field.optional).toBe(false);
+    }));
+    expect(result).toContain('petId (path, required, string)');
   });
 
-  it('maps integer schema to z.number()', () => {
-    const tool = endpointToTool(makeEndpoint({
-      parameters: [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer' } }],
-    }), BASE_URL, NO_AUTH, '');
-    const field = tool.inputSchema.fields.find(f => f.name === 'limit')!;
-    expect(field.zodType).toBe('z.number()');
+  it('shows enum values in type description', () => {
+    const result = formatEndpointForSearch(makeEndpoint({
+      parameters: [{ name: 'status', in: 'query', required: false, schema: { type: 'string', enum: ['active', 'inactive'] } }],
+    }));
+    expect(result).toContain('string: active|inactive');
   });
 
-  it('maps boolean schema to z.boolean()', () => {
-    const tool = endpointToTool(makeEndpoint({
-      parameters: [{ name: 'active', in: 'query', required: false, schema: { type: 'boolean' } }],
-    }), BASE_URL, NO_AUTH, '');
-    const field = tool.inputSchema.fields.find(f => f.name === 'active')!;
-    expect(field.zodType).toBe('z.boolean()');
+  it('omits header parameters from param list', () => {
+    const result = formatEndpointForSearch(makeEndpoint({
+      parameters: [
+        { name: 'X-Custom', in: 'header', required: false },
+        { name: 'limit', in: 'query', required: false },
+      ],
+    }));
+    expect(result).not.toContain('X-Custom');
+    expect(result).toContain('limit');
   });
 
-  it('maps enum schema to z.enum()', () => {
-    const tool = endpointToTool(makeEndpoint({
-      parameters: [{ name: 'status', in: 'query', required: false, schema: { type: 'string', enum: ['open', 'closed'] } }],
-    }), BASE_URL, NO_AUTH, '');
-    const field = tool.inputSchema.fields.find(f => f.name === 'status')!;
-    expect(field.zodType).toContain('z.enum');
-    expect(field.zodType).toContain('open');
-    expect(field.zodType).toContain('closed');
+  it('shows request body line with content type', () => {
+    const result = formatEndpointForSearch(makeEndpoint({
+      requestBody: { required: true, contentType: 'application/json', schema: {} },
+    }));
+    expect(result).toContain('Body: required (application/json)');
   });
 
-  it('adds body field when requestBody is present', () => {
-    const tool = endpointToTool(makeEndpoint({
-      method: 'POST',
-      requestBody: { required: true, contentType: 'application/json', schema: { type: 'object' } },
-    }), BASE_URL, NO_AUTH, '');
-    const bodyField = tool.inputSchema.fields.find(f => f.name === 'body');
-    expect(bodyField).toBeDefined();
-    expect(bodyField?.optional).toBe(false);
+  it('shows optional body', () => {
+    const result = formatEndpointForSearch(makeEndpoint({
+      requestBody: { required: false, contentType: 'application/json' },
+    }));
+    expect(result).toContain('Body: optional');
   });
 
-  it('generates implementation with correct HTTP method', () => {
-    const tool = endpointToTool(makeEndpoint({ method: 'DELETE', path: '/pets/{id}' }), BASE_URL, NO_AUTH, '');
-    expect(tool.implementation).toContain("method: 'DELETE'");
+  it('includes tags', () => {
+    const result = formatEndpointForSearch(makeEndpoint({ tags: ['pets', 'animals'] }));
+    expect(result).toContain('pets');
+    expect(result).toContain('animals');
   });
 
-  it('interpolates path params into URL', () => {
-    const tool = endpointToTool(makeEndpoint({
-      method: 'GET',
-      path: '/pets/{petId}',
-      parameters: [{ name: 'petId', in: 'path', required: true }],
-    }), BASE_URL, NO_AUTH, '');
-    expect(tool.implementation).toContain('${petId}');
-  });
-
-  it('includes auth headers in implementation', () => {
-    const tool = endpointToTool(makeEndpoint({}), BASE_URL, AUTH_HEADERS, '');
-    expect(tool.implementation).toContain(AUTH_HEADERS);
-  });
-
-  it('generates GraphQL implementation for GRAPHQL_QUERY', () => {
-    const tool = endpointToTool(makeEndpoint({
-      id: 'query_user',
-      operationId: 'query_user',
-      method: 'GRAPHQL_QUERY',
-      path: 'https://api.example.com/graphql',
-      parameters: [{ name: 'id', in: 'query', required: true, schema: { type: 'string' } }],
-    }), BASE_URL, NO_AUTH, '');
-    expect(tool.implementation).toContain('query');
-    expect(tool.implementation).toContain('variables');
-  });
-
-  it('sanitizes hyphenated parameter names to camelCase', () => {
-    const tool = endpointToTool(makeEndpoint({
-      parameters: [{ name: 'user-id', in: 'query', required: false }],
-    }), BASE_URL, NO_AUTH, '');
-    const field = tool.inputSchema.fields.find(f => f.name === 'userId');
-    expect(field).toBeDefined();
+  it('omits params/body/tags lines when absent', () => {
+    const result = formatEndpointForSearch(makeEndpoint({ summary: 'Simple' }));
+    expect(result).not.toContain('Params:');
+    expect(result).not.toContain('Body:');
+    expect(result).not.toContain('Tags:');
   });
 });

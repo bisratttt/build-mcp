@@ -66,10 +66,12 @@ const server = new McpServer({
   version: '${spec.info.version}',
 });
 
-// ── Tool 1: search_api_docs ───────────────────────────────────────────────────
+const _slug = '${sanitizeId(spec.info.title)}';
+
+// ── Tool 1: {slug}_search_docs ────────────────────────────────────────────────
 server.tool(
-  'search_api_docs',
-  \`Search the ${spec.info.title} API documentation. Returns matching endpoint IDs and their parameter schemas. Always call this before call_api if you don't already know the exact endpoint ID.\`,
+  \`\${_slug}_search_docs\`,
+  \`Search the ${spec.info.title} API documentation. Returns matching endpoint IDs and their parameter schemas. Always call this before \${_slug}_call_api if you don't already know the exact endpoint ID.\`,
   {
     query: z.string().describe('What you want to do, in plain English'),
     limit: z.number().int().min(1).max(20).optional().default(5),
@@ -109,10 +111,10 @@ server.tool(
   },
 );
 
-// ── Tool 2: call_api ──────────────────────────────────────────────────────────
+// ── Tool 2: {slug}_call_api ───────────────────────────────────────────────────
 server.tool(
-  'call_api',
-  \`Call a ${spec.info.title} API endpoint. Use search_api_docs first to get the endpoint ID and required params.\`,
+  \`\${_slug}_call_api\`,
+  \`Call a ${spec.info.title} API endpoint. Use \${_slug}_search_docs first to get the endpoint ID and required params.\`,
   {
     endpoint_id: z.string().describe('Endpoint ID from search_api_docs'),
     params: z.record(z.unknown()).optional().describe('Path, query, and header parameters keyed by name'),
