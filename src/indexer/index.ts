@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import type { SQLInputValue } from 'node:sqlite';
 import type { NormalizedSpec, Endpoint, EmbedConfig, SafetyLevel } from '../types.js';
 import { embed, buildEndpointText } from './embed.js';
 
@@ -200,26 +201,26 @@ export class ApiIndexer {
 
     const insertEndpoint = this.db.prepare(`
       INSERT OR REPLACE INTO endpoints (id, method, path, summary, description, tags, endpoint_json, embedding)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (:id, :method, :path, :summary, :description, :tags, :endpoint_json, :embedding)
     `);
 
     // Embed all endpoints (async, must happen outside the transaction)
-    const rows: Parameters<typeof insertEndpoint.run>[] = [];
+    const rows: Record<string, SQLInputValue>[] = [];
     for (const ep of spec.endpoints) {
       const text = buildEndpointText(ep);
       const { embedding } = await embed(text, embedConfig);
-      rows.push([
-        ep.id, ep.method, ep.path,
-        ep.summary ?? null, ep.description ?? null,
-        JSON.stringify(ep.tags), JSON.stringify(sanitizeEndpoint(ep)),
-        float32ToBuffer(embedding),
-      ]);
+      rows.push({
+        id: ep.id, method: ep.method, path: ep.path,
+        summary: ep.summary ?? null, description: ep.description ?? null,
+        tags: JSON.stringify(ep.tags), endpoint_json: JSON.stringify(sanitizeEndpoint(ep)),
+        embedding: float32ToBuffer(embedding),
+      });
     }
 
     // Bulk insert in a single transaction (~100x faster than one-by-one)
     this.db.exec('BEGIN');
     try {
-      for (const args of rows) insertEndpoint.run(...args);
+      for (const row of rows) insertEndpoint.run(row);
       this.db.exec('COMMIT');
     } catch (e) {
       this.db.exec('ROLLBACK');
